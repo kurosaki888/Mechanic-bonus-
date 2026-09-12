@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メカニック｜ボーナス支給管理</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0f1115;color:#f5f5f5;font-family:system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif}
+.container{max-width:1100px;margin:auto;padding:28px 18px 50px}
+header{background:linear-gradient(135deg,#1a1d24,#111318);border:1px solid #2b303a;border-radius:18px;padding:25px;margin-bottom:20px}
+h1{margin:0 0 7px;font-size:clamp(24px,4vw,34px)}
+.subtitle{color:#aeb5c0;margin:0}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
+button,.filter{border:1px solid #343a46;background:#1b1f27;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+button:hover{background:#252b35}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
+.stat{background:#171a21;border:1px solid #292e38;border-radius:14px;padding:16px}
+.stat b{display:block;font-size:24px;margin-top:4px}
+.list{display:grid;gap:12px}
+.card{background:#171a21;border:1px solid #292e38;border-radius:14px;padding:16px}
+.row{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.name{font-size:18px;font-weight:700}
+.rank{font-size:12px;color:#aeb5c0;margin-top:3px}
+.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+label{font-size:12px;color:#aeb5c0;display:block;margin-bottom:5px}
+input,select{width:100%;background:#0f1115;color:#fff;border:1px solid #343a46;border-radius:9px;padding:9px}
+.status{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.status input{width:19px;height:19px;accent-color:#35c46a}
+.paid{border-color:#23633a}
+.paid .name{color:#79e59a}
+.empty{color:#9ba2ad;text-align:center;padding:35px}
+@media(max-width:650px){
+ .stats{grid-template-columns:1fr}
+ .details{grid-template-columns:1fr}
+ .row{align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>💰 ボーナス支給管理</h1>
+<p class="subtitle">メカニックメンバーの階級・ボーナス支給状況をまとめて管理</p>
+<div class="controls">
+<select class="filter" id="rankFilter">
+<option value="all">全階級を表示</option>
+<option>チーフ</option>
+<option>1級整備士</option>
+<option>2級整備士</option>
+<option>整備士</option>
+<option>見習い整備士</option>
+</select>
+<button onclick="resetAll()">↩ データを初期化</button>
+</div>
+</header>
+
+<div class="stats">
+<div class="stat">👥 メンバー<b id="memberCount">0</b></div>
+<div class="stat">✅ 支給済み<b id="paidCount">0 / 0</b></div>
+<div class="stat">💴 総支給額<b id="totalAmount">￥0</b></div>
+</div>
+
+<div class="list" id="list"></div>
+</div>
+
+<script>
+const ranks=["チーフ","1級整備士","2級整備士","整備士","見習い整備士"];
+const members=[
+ {name:"黒崎 蓮",rank:"チーフ",owner:true},
+ {name:"ねむ。",rank:"チーフ"},
+ {name:"すばる",rank:"整備士"},
+ {name:"POTATO WORLD",rank:"見習い整備士"},
+ {name:"朔麻 千秋",rank:"見習い整備士"},
+ {name:"ウィリアム ヘパリン",rank:"見習い整備士"},
+ {name:"コウ・フォン・ヴェルデン",rank:"見習い整備士"},
+ {name:"九条 風太",rank:"見習い整備士"},
+ {name:"ぴーなっつ",rank:"見習い整備士"},
+ {name:"白雪 千",rank:"見習い整備士"},
+ {name:"楠 みのん",rank:"見習い整備士"},
+ {name:"三都 ごろう",rank:"見習い整備士"}
+];
+
+let data=JSON.parse(localStorage.getItem("mechanicBonusData")||"null") || members.map(x=>({
+ name:x.name,rank:x.rank,paid:false,amount:"",date:"",owner:!!x.owner
+}));
+
+function save(){localStorage.setItem("mechanicBonusData",JSON.stringify(data));}
+function yen(n){return "￥"+Number(n||0).toLocaleString("ja-JP");}
+
+function render(){
+ const filter=document.getElementById("rankFilter").value;
+ const list=document.getElementById("list");
+ list.innerHTML="";
+ const visible=data.filter(x=>filter==="all"||x.rank===filter);
+ if(!visible.length){list.innerHTML='<div class="empty">該当するメンバーはいません。</div>';return;}
+ visible.forEach((m)=>{
+  const i=data.indexOf(m);
+  const card=document.createElement("div");
+  card.className="card"+(m.paid?" paid":"");
+  card.innerHTML=`
+   <div class="row">
+    <div>
+      <div class="name">${esc(m.name)} ${m.owner?'<span style="font-size:12px;color:#f2c45b">👑 OWNER</span>':''}</div>
+      <div class="rank">現在の階級：${esc(m.rank)}</div>
+    </div>
+    <label class="status"><input type="checkbox" ${m.paid?"checked":""} onchange="change(${i},'paid',this.checked)"> 支給済み</label>
+   </div>
+   <div class="details">
+    <div>
+      <label>階級</label>
+      <select onchange="change(${i},'rank',this.value)">
+       ${ranks.map(r=>`<option ${r===m.rank?"selected":""}>${r}</option>`).join("")}
+      </select>
+    </div>
+    <div>
+      <label>支給額</label>
+      <input inputmode="numeric" placeholder="例：500000" value="${esc(m.amount)}" onchange="change(${i},'amount',this.value)">
+    </div>
+    <div>
+      <label>支給日</label>
+      <input type="date" value="${esc(m.date)}" onchange="change(${i},'date',this.value)">
+    </div>
+   </div>`;
+  list.appendChild(card);
+ });
+ updateStats();
+}
+function change(i,key,value){
+ data[i][key]=value;
+ save();
+ render();
+}
+function updateStats(){
+ const paid=data.filter(x=>x.paid).length;
+ const total=data.reduce((s,x)=>s+(Number(String(x.amount).replace(/[^0-9]/g,""))||0),0);
+ document.getElementById("memberCount").textContent=data.length+"名";
+ document.getElementById("paidCount").textContent=paid+" / "+data.length;
+ document.getElementById("totalAmount").textContent=yen(total);
+}
+function resetAll(){
+ if(confirm("保存した支給状況・階級・金額・日付を初期状態に戻しますか？")){
+  data=members.map(x=>({name:x.name,rank:x.rank,paid:false,amount:"",date:"",owner:!!x.owner}));
+  save(); render();
+ }
+}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+document.getElementById("rankFilter").addEventListener("change",render);
+render();
+</script>
+</body>
+</html>
